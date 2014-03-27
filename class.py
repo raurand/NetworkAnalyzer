@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
-#  First attempt to manipulate the AD9858 dds from the 
-#  serial port through the Atria board.
+#  First attempt to create a class for the AD9858 dds 
+#
 #
 #  Written:  March 9, 2014
 #            R.C. Aurand
@@ -10,11 +10,22 @@
 import sys
 import serial
 import math
+import os
 
-debug=0     # use 0 for off and 1 for on
-cr=chr(13)  # ascii 13 is the carriage return.  Used to terminate lines
+class ad9858():
+    cr=chr(13)
+    freq="5002."
+    #control=0
+    ser=serial.Serial(
+        port="/dev/ttyACM1",
+        baudrate=9600,
+        timeout=1,
+        parity=serial.PARITY_NONE,
+        stopbits=serial.STOPBITS_ONE,
+        )
 
-class ad9859():
+    print "frequency = ", freq
+
 
 #
 #  methods needed by AD9858
@@ -25,9 +36,11 @@ class ad9859():
 #   5.  Needs a method to reset
 #   6.  Needs a method to ioreset
 #   7.  Needs a method to FUD
+#   8.  Needs a method to send a frequency
 #
     def __init__(self):
         
+
         msg0=[]
         msg0.append("new")
         msg0.append("dim reset as pin pth3 for digital output")
@@ -54,151 +67,146 @@ class ad9859():
 
         for msg in msg0:
             print msg
-            ser.write(msg + cr)
+            self.ser.write(msg + self.cr)
 
         for msg in msg1:
             print msg
-            ser.write(msg + cr)
+            self.ser.write(msg + self.cr)
 
-    
-    def send_bits(a_byte, msb, ser):
-        debug = 1
+    def __del__(self):
+        self.ser.close()
+        print "port closed"
+
+    def f(self, f):
+        two=math.pow(2,32)
+        fx=100000
+        
+        w="{0:032b}".format(int((two*float(f))/fx))  # found on stackexchange
+        instruction="00000011"
+        self.send_bits(instruction)
+        self.freq_update()
+        self.send_bits(w)
+        self.freq_update()
+
+    def send_bits(self, a_byte):
         mask = 1
+        msb=1
 
         if msb:                         # if msb = 1 then load the data msb first.
             d = (int(a_byte[::-1], 2))  # this step reverses the bit order
         else:                           # found somewhere on StackExchange
             d = int(a_byte, 2)
-
-        if debug:
-            print "echo check"
-            print "word = ",a_byte, " length ", len(a_byte)
-            print "integer = ",d
-            print "mask = ", mask
-            print "msb = ", msb
-        
+      
         for dx in a_byte:
-            ser.write("let cs0 = 0" + cr)
+            self.ser.write("let cs0 = 0" + self.cr)
             
             if (d & mask):
-                ser.write("let sdio = 1" + cr)
+                self.ser.write("let sdio = 1" + self.cr)
             else:
-                ser.write("let sdio = 0" + cr)
+                self.ser.write("let sdio = 0" + self.cr)
             d = d >> 1
-            ser.write("let clk = 1" + cr)
-            ser.write("let clk = 0" + cr)
-            ser.write("let cs0 = 1" + cr)
+            self.ser.write("let clk = 1" + self.cr)
+            self.ser.write("let clk = 0" + self.cr)
+            self.ser.write("let cs0 = 1" + self.cr)
     
-    def freq_update(ser):
-        ser.write("let fud = 1" + cr)
-        ser.write("let fud = 0" + cr)
-        print "sending FUD"
+    def freq_update(self):
+        self.ser.write("let fud = 1" + self.cr)
+        self.ser.write("let fud = 0" + self.cr)
+
+#----------------------------------------------Everything above this line works
 
 
-def open_port():
-    ser=serial.Serial(
-        port="/dev/ttyACM0",
-        baudrate=9600,
-        timeout=1,
-        parity=serial.PARITY_NONE,
-        stopbits=serial.STOPBITS_ONE,
-        )
-    return ser
-    
-def close_port(ser):
-    ser.close()
+    def toggle(ser):
+        while 1:
+            ser.write("let sdio=!sdio" + cr)
 
-def toggle(ser):
-    while 1:
-        ser.write("let sdio=!sdio" + cr)
+    def reset(ser):
+        ser.write("let reset = 1" + cr)  #  Do a chip reset
+        ser.write("let reset = 0" + cr)
+     
+    def ioreset(ser):
+        ser.write("let ioreset = 1" + cr)
+        ser.write("let ioreset = 0" +cr)
+     
+    def load_control_register(ser):
+        msb=1
+        #register0="00000000000000000000000001011010"
+        #register0="00000000000000000000000000000000"
+        register0="00000000000000000000000001000010"
+        #register0="11111111111111111111111111111111"
+        instruction="00000000"                # Load the instruction register and
+      
+        send_byte(instruction, msb, ser)      # point to register 0
+        freq_update(ser)
+        send_byte(register0, msb, ser)
+        freq_update(ser)
 
+    def control_1(ser):
+        msb=1
+        #register0="00000000000000000000000001011010"
+        #register0="00000000000000000000000000000000"
+        register0="00000000000000000000000001100010"
+        #register0="11111111111111111111111111111111"
+        instruction="00000000"                # Load the instruction register and
+      
+        send_byte(instruction, msb, ser)      # point to register 0
+        freq_update(ser)
+        send_byte(register0, msb, ser)
+        freq_update(ser)
 
-def reset(ser):
-    ser.write("let reset = 1" + cr)  #  Do a chip reset
-    ser.write("let reset = 0" + cr)
- 
-def ioreset(ser):
-    ser.write("let ioreset = 1" + cr)
-    ser.write("let ioreset = 0" +cr)
- 
-def load_control_register(ser):
-    msb=1
-    #register0="00000000000000000000000001011010"
-    #register0="00000000000000000000000000000000"
-    register0="00000000000000000000000001000010"
-    #register0="11111111111111111111111111111111"
-    instruction="00000000"                # Load the instruction register and
-  
-    send_byte(instruction, msb, ser)      # point to register 0
-    freq_update(ser)
-    send_byte(register0, msb, ser)
-    freq_update(ser)
+    def load_frequency_register_3(ser):
+        msb=1
+        #register3="01100000000000000000000000000110"
+        register3="01000000000000000000000000000000"
+        #register3="00001111111111111111111111110000"
 
-def control_1(ser):
-    msb=1
-    #register0="00000000000000000000000001011010"
-    #register0="00000000000000000000000000000000"
-    register0="00000000000000000000000001100010"
-    #register0="11111111111111111111111111111111"
-    instruction="00000000"                # Load the instruction register and
-  
-    send_byte(instruction, msb, ser)      # point to register 0
-    freq_update(ser)
-    send_byte(register0, msb, ser)
-    freq_update(ser)
+        instruction="00000011"      # Load the instruction register and
+        send_byte(instruction, msb, ser)      # point to register 3
+        freq_update(ser)
+        send_byte(register3, msb, ser)
+        freq_update(ser)
 
-def load_frequency_register_3(ser):
-    msb=1
-    #register3="01100000000000000000000000000110"
-    register3="01000000000000000000000000000000"
-    #register3="00001111111111111111111111110000"
+    def byte(ser):
+        msb=1
+        by=raw_input("Enter the byte ")
+        instruction="00000011"
+        send_byte(instruction, msb, ser)
+        freq_update(ser)
+        send_byte(by + "000000000000000000000000", msb, ser)
+        freq_update(ser)
 
-    instruction="00000011"      # Load the instruction register and
-    send_byte(instruction, msb, ser)      # point to register 3
-    freq_update(ser)
-    send_byte(register3, msb, ser)
-    freq_update(ser)
+    def load_register_4(ser):
+        msb=1
+        register4="0000000000000000"
+        instruction="00000100"
+        send_byte(instruction, msb, ser)
+        freq_update(ser)
+        send_byte(register4, msb, ser)
+        freq_update(ser)
 
-def byte(ser):
-    msb=1
-    by=raw_input("Enter the byte ")
-    instruction="00000011"
-    send_byte(instruction, msb, ser)
-    freq_update(ser)
-    send_byte(by + "000000000000000000000000", msb, ser)
-    freq_update(ser)
-
-def load_register_4(ser):
-    msb=1
-    register4="0000000000000000"
-    instruction="00000100"
-    send_byte(instruction, msb, ser)
-    freq_update(ser)
-    send_byte(register4, msb, ser)
-    freq_update(ser)
-
-def freq(ser):
-    msb=1
-    two=math.pow(2,32)
-    fx=100000
-    
-    f=raw_input("Enter the frequency in kHz ")
-    w="{0:032b}".format(int((two*float(f))/fx))  # found on stackexchange
-    print "tuning word = ", w
-    print "tuning word = ", int((float(f)*two)/fx)
-    instruction="00000011"
-    send_byte(instruction, msb, ser)
-    freq_update(ser)
-    send_byte(w, msb, ser)
-    freq_update(ser)
-
+    def freq(ser):
+        msb=1
+        two=math.pow(2,32)
+        fx=100000
+        
+        f=raw_input("Enter the frequency in kHz ")
+        w="{0:032b}".format(int((two*float(f))/fx))  # found on stackexchange
+        print "tuning word = ", w
+        print "tuning word = ", int((float(f)*two)/fx)
+        instruction="00000011"
+        send_byte(instruction, msb, ser)
+        freq_update(ser)
+        send_byte(w, msb, ser)
+        freq_update(ser)
 
 def main():
+    #os.system("clear")
+
     prompt0=[]
     prompt0.append("\n")
-    prompt0.append("open       open the serial port")
-    prompt0.append("close      close the serial port")
-    prompt0.append("init       load the pin names")
+#    prompt0.append("open       open the serial port")
+#    prompt0.append("close      close the serial port")
+#    prompt0.append("init       load the pin names")
     prompt0.append("reset      reset the DDS")
     prompt0.append("ioreset    ioreset the DDS")
     prompt0.append("control    load the control register")
@@ -213,7 +221,11 @@ def main():
 
     for msg in prompt0:
         print msg
-   
+
+    dds0=ad9858()
+    print "dds0 frequency is ", (dds0.freq)
+    print(dds0.freq)
+
     i="1"
     while i:                #<>"quit" and i<>"q":
         if i=="open":
@@ -239,23 +251,24 @@ def main():
         if i=="toggle":
             toggle(ser)
         if i=="f":
-            freq(ser)
+            f=raw_input("Enter the frequency in kHz ")
+            dds0.f(f)
+            #freq(ser)
         if i=="options":
             main()
         if i=="byte":
             byte(ser)
         if i=="q":
-            ser.write("let cs0 = 1" + cr)
+#            ser.write("let cs0 = 1" + cr)
+            del(dds0)
             sys.exit()
         if i=="quit":
            ser.write("let cs0 = 1" + cr)
            sys.exit()
         i=raw_input("select action\n")
 
-
 if __name__=="__main__":
     main()
-
 
     #print int(instruction, 2)    # Use this if the variable instruction is base 2 (binary)
     #print int(instruction, 16)   # Use this if the variable instruction is base 16 (hex)

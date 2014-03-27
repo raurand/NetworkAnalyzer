@@ -10,7 +10,10 @@
 import sys
 import serial
 import math
+import os
 
+
+os.system("clear")
 debug=0     # use 0 for off and 1 for on
 cr=chr(13)  # ascii 13 is the carriage return.  Used to terminate lines
 
