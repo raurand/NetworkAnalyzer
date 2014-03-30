@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 #
-#  First attempt to create a class for the AD9858 dds 
+#  working more with the class for the AD958 dds 
 #
 #
-#  Written:  March 9, 2014
+#  Written:  March 30, 2014
 #            R.C. Aurand
 #---------------------------------------------------------
 
@@ -12,19 +12,9 @@ import serial
 import math
 import os
 
+
 class ad9858():
 
-#
-#  methods needed by AD9858
-#   1.  Needs a method to send a string of bits
-#   2.  Needs a method to initialize the AD9858
-#   3.  Needs a method to convert frequency (in kHz) to a tuning word
-#   4.  Needs a method to set the control register
-#   5.  Needs a method to reset
-#   6.  Needs a method to ioreset
-#   7.  Needs a method to FUD
-#   8.  Needs a method to send a frequency
-#
     def __init__(self):
         self.cr=chr(13)
         self.F0=10000.
@@ -37,13 +27,14 @@ class ad9858():
         self.two=math.pow(2,32)
    
         self.ser=serial.Serial(
-            port="/dev/ttyACM1",
+            port="/dev/ttyACM0",
             baudrate=9600,
             timeout=1,
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
             )
-
+        self.clear_buffer()
+        
         msg0=[]
         msg0.append("new")
         msg0.append("dim reset as pin pth3 for digital output")
@@ -79,19 +70,19 @@ class ad9858():
 
     def new_F0(self, f):
         self.F0=f
-        self.go_F0()
+        self.go_F(3, self.F0)
  
     def new_F1(self, f):
         self.F1=f
-        self.go_F1()
+        self.go_F(5, self.F1)
             
     def new_F2(self, f):
         self.F2=f
-        self.go_F2()
+        self.go_F(7, self.F2)
 
     def new_F3(self, f):
         self.F3=f
-        self.go_F3()
+        self.go_F(9, self.F3)
 
     def new_control(self, ctl):
         self.control=ctl
@@ -108,46 +99,15 @@ class ad9858():
     def go_control(self):
         w="{0:08b}".format(int(self.control))
         self.send_bits(w)
+        self.clear_buffer()
 
-    def go_F0(self):
-        self.control=3
-        w="{0:032b}".format(int((self.two*float(self.F0))/self.fx))  # found on stackexchange
+    def go_F(self, ctl, F):
+        self.control=ctl
+        w="{0:032b}".format(int((self.two*float(F))/self.fx))  # found on stackexchange
         self.go_control()
         self.send_bits(w)
         self.freq_update()
-
-    def go_F1(self):
-        self.control=5
-        w="{0:032b}".format(int((self.two*float(self.F1))/self.fx))  # found on stackexchange
-        self.go_control()
-        self.send_bits(w)
-        self.freq_update()
-
-    def go_F2(self):
-        self.control=7
-        w="{0:032b}".format(int((self.two*float(self.F2))/self.fx))  # found on stackexchange
-        self.go_control()
-        self.send_bits(w)
-        self.freq_update()
-    
-    def go_F3(self):
-        self.control=9
-        w="{0:032b}".format(int((self.two*float(self.F3))/self.fx))  # found on stackexchange
-        self.go_control()
-        self.send_bits(w)
-        self.freq_update()
-
-    def f(self, f):
-        self.freq=f
-        two=math.pow(2,32)
-        #fx=100000
-        
-        w="{0:032b}".format(int((two*float(f))/self.fx))  # found on stackexchange
-        instruction="00000011"
-        self.send_bits(instruction)
-        self.freq_update()
-        self.send_bits(w)
-        self.freq_update()
+        self.clear_buffer()
 
     def send_bits(self, a_byte):
         mask = 1
@@ -170,24 +130,25 @@ class ad9858():
             self.ser.write("let clk = 0" + self.cr)
             self.ser.write("let cs0 = 1" + self.cr)
     
+    def clear_buffer(self):
+        """This method will clear the buffer from the Atria"""
+        return self.ser.read(2000)
+   
     def freq_update(self):
         self.ser.write("let fud = 1" + self.cr)
         self.ser.write("let fud = 0" + self.cr)
 
-#----------------------------------------------Everything above this line works
-
-
     def toggle(self):
         while 1:
-            ser.write("let sdio=!sdio" + cr)
+            self.ser.write("let sdio=!sdio" + cr)
 
     def reset(self):
-        ser.write("let reset = 1" + cr)  #  Do a chip reset
-        ser.write("let reset = 0" + cr)
+        self.ser.write("let reset = 1" + cr)  #  Do a chip reset
+        self.ser.write("let reset = 0" + cr)
      
     def ioreset(self):
-        ser.write("let ioreset = 1" + cr)
-        ser.write("let ioreset = 0" +cr)
+        self.ser.write("let ioreset = 1" + cr)
+        self.ser.write("let ioreset = 0" +cr)
 
 
 

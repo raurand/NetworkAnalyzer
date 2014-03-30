@@ -52,7 +52,7 @@ def freq_update(ser):
 
 def open_port():
     ser=serial.Serial(
-        port="/dev/ttyACM1",
+        port="/dev/ttyACM0",
         baudrate=9600,
         timeout=1,
         parity=serial.PARITY_NONE,
